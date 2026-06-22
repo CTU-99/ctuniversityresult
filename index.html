@@ -81,9 +81,7 @@ th{
 
 <input type="text" id="regno" placeholder="Enter Registration Number">
 
-<select id="session">
-<option value="June26">June26</option>
-</select>
+<select id="session"></select>
 
 <button onclick="searchResult()">Search Result</button>
 
@@ -95,6 +93,21 @@ th{
 
 const API_URL ="https://script.google.com/macros/s/AKfycbxEC6fTGwgYEoDI_BWdSlyNhFfkBbon2WkzUQH-3FlUMsaa6GOrtBBF7KCSAgTR6W_0/exec";
 
+async function loadSessions(){
+
+    const sessions = await fetch(API_URL + "?action=sessions");
+    const data = await sessions.json();
+
+    let options = "";
+
+    data.forEach(session=>{
+        options += `<option value="${session}">${session}</option>`;
+    });
+
+    document.getElementById("session").innerHTML = options;
+}
+
+window.onload = loadSessions;
 async function searchResult(){
 
     let regno = document.getElementById("regno").value;
