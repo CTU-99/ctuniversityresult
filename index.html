@@ -24,14 +24,24 @@ body{
 h1{
     text-align:center;
     color:#003366;
+    margin-bottom: 20px;
+}
+
+label{
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-top: 10px;
 }
 
 input,select{
     width:100%;
     padding:10px;
-    margin-top:10px;
+    margin-top:5px;
     margin-bottom:15px;
     font-size:16px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
 }
 
 button{
@@ -42,6 +52,37 @@ button{
     border:none;
     border-radius:5px;
     font-size:16px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover{
+    background: #0055aa;
+}
+
+#loading{
+    display: none;
+    text-align: center;
+    font-weight: bold;
+    color: #003366;
+    margin-top: 15px;
+}
+
+#output {
+    margin-top: 25px;
+}
+
+.student-details {
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border-left: 5px solid #003366;
+}
+
+.student-details p {
+    margin: 5px 0;
+    font-size: 16px;
 }
 
 table{
@@ -52,7 +93,7 @@ table{
 
 th,td{
     border:1px solid #ccc;
-    padding:8px;
+    padding:10px;
     text-align:center;
 }
 
@@ -79,63 +120,94 @@ th{
 
 <h1>CT University Result Portal</h1>
 
+<label for="regno">Registration Number</label>
 <input type="text" id="regno" placeholder="Enter Registration Number">
 
-<select id="session"></select>
+<label for="session">Select Session</label>
+<select id="session">
+    <option value="">Loading Sessions...</option>
+</select>
 
 <button onclick="searchResult()">Search Result</button>
 
+<div id="loading">Please Wait... Fetching Result...</div>
 <div id="output"></div>
 
 </div>
 
 <script>
+// Aapka actual Apps Script API URL
+const API_URL = "https://script.google.com/macros/s/AKfycbxEC6fTGwgYEoDI_BWdSlyNhFfkBbon2WkzUQH-3FlUMsaa6GOrtBBF7KCSAgTR6W_0/exec";
 
-const API_URL ="https://script.google.com/macros/s/AKfycbxEC6fTGwgYEoDI_BWdSlyNhFfkBbon2WkzUQH-3FlUMsaa6GOrtBBF7KCSAgTR6W_0/exec";
-
+// 1. Sessions ko dropdown me load karna
 async function loadSessions(){
+    try {
+        const response = await fetch(API_URL + "?action=sessions", { method: "GET", redirect: "follow" });
+        const rawData = await response.json();
+        
+        // String response ko JavaScript object me parse karna
+        const data = (typeof rawData === "string") ? JSON.parse(rawData) : rawData;
 
-    const sessions = await fetch(API_URL + "?action=sessions");
-    const data = await sessions.json();
-
-    let options = "";
-
-    data.forEach(session=>{
-        options += `<option value="${session}">${session}</option>`;
-    });
-
-    document.getElementById("session").innerHTML = options;
+        if(data && data.status) {
+            let options = '<option value="">-- Select Session --</option>';
+            data.sessions.forEach(session => {
+                options += `<option value="${session}">${session}</option>`;
+            });
+            document.getElementById("session").innerHTML = options;
+        } else {
+            document.getElementById("session").innerHTML = '<option value="">Failed to load sessions</option>';
+        }
+    } catch(err) {
+        console.error("Error loading sessions:", err);
+        document.getElementById("session").innerHTML = '<option value="">Error connecting to server</option>';
+    }
 }
 
 window.onload = loadSessions;
-async function searchResult(){
 
-    let regno = document.getElementById("regno").value;
+// 2. Student Result Search Karna
+async function searchResult(){
+    let regno = document.getElementById("regno").value.trim();
     let session = document.getElementById("session").value;
 
-    let response = await fetch(API_URL + "?regno=" + regno + "&session=" + session);
+    if(!regno || !session) {
+        alert("Please enter Registration Number and select Session.");
+        return;
+    }
 
-    let data = await response.json();
+    document.getElementById("loading").style.display = "block";
+    document.getElementById("output").innerHTML = "";
 
-    let html = "";
+    try {
+        let response = await fetch(`${API_URL}?session=${encodeURIComponent(session)}&regno=${encodeURIComponent(regno)}`, { method: "GET", redirect: "follow" });
+        let rawData = await response.json();
+        
+        // Response ko parse karna
+        let data = (typeof rawData === "string") ? JSON.parse(rawData) : rawData;
 
-    if(data.length===0){
-        html="<h3 style='color:red'>No Result Found</h3>";
-    }else{
+        document.getElementById("loading").style.display = "none";
 
-        html += "<h2>Student Details</h2>";
+        if(!data.status){
+            document.getElementById("output").innerHTML = `<h3 style='color:red; text-align:center;'>${data.message} ${data.reason ? '<br>Reason: ' + data.reason : ''}</h3>`;
+            return;
+        }
 
-        html += "<p><b>Name:</b> "+data[0].name+"</p>";
-        html += "<p><b>Registration No:</b> "+data[0].regno+"</p>";
-        html += "<p><b>Course:</b> "+data[0].course+"</p>";
-        html += "<p><b>Semester:</b> "+data[0].sem+"</p>";
+        // HTML Layout generate karna dynamically mapping ke saath
+        let html = "<div class='student-details'>";
+        html += "<h2>Student Details</h2><br>";
+        html += "<p><b>Name:</b> " + data.student.name + "</p>";
+        html += "<p><b>Registration No:</b> " + data.student.regno + "</p>";
+        html += "<p><b>Course:</b> " + data.student.course + "</p>";
+        html += "<p><b>Semester:</b> " + data.student.sem + "</p>";
+        html += "<p><b>SGPA:</b> " + data.student.sgpa + "</p>";
+        html += "<p><b>Overall Status:</b> <span class='" + (data.student.overall.toLowerCase().includes("fail") ? "fail" : "pass") + "'>" + data.student.overall + "</span></p>";
+        html += "</div>";
 
         html += "<table>";
-        html += "<tr><th>Subject Code</th><th>Subject</th><th>Credit</th><th>Grade</th><th>Grade Point</th><th>Remarks</th></tr>";
+        html += "<tr><th>Sub Code</th><th>Subject</th><th>Credit</th><th>Grade</th><th>Grade Point</th><th>Internal/External</th><th>Remarks</th></tr>";
 
-        data.forEach(row=>{
-
-            let cls=(row.grade=="F")?"fail":"pass";
+        data.subjects.forEach(row => {
+            let cls = (row.grade == "F" || row.grade == "E" || row.grade == "Ab") ? "fail" : "pass";
 
             html += `
             <tr>
@@ -143,15 +215,20 @@ async function searchResult(){
                 <td>${row.subject}</td>
                 <td>${row.credit}</td>
                 <td class="${cls}">${row.grade}</td>
-                <td>${row.gradept}</td>
-                <td>${row.remarks}</td>
+                <td>${row.gradePoint}</td>
+                <td>${row.internalExternal || "-"}</td>
+                <td>${row.remarks || "-"}</td>
             </tr>`;
         });
 
         html += "</table>";
-    }
+        document.getElementById("output").innerHTML = html;
 
-    document.getElementById("output").innerHTML = html;
+    } catch (err) {
+        document.getElementById("loading").style.display = "none";
+        console.error("Error fetching result:", err);
+        alert("Something went wrong while fetching data. Please try again.");
+    }
 }
 </script>
 
